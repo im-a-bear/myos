@@ -11,7 +11,9 @@
 
 ; bios interrupts
 %define BIOS_INTERRUPT 0x10
+%define BIOS_WRITE 0x13
 %define VIDEO_FUNC 0x0E
+%define SECTOR_READ 0x02
 %define CURSOR_TYPE_FUNC 0x01
 
 ; bios info
@@ -20,6 +22,7 @@
 ; colors
 %define BASE_TEXT_COLOR 0x6D
 %define BACKGROUND_COLOR 0x6F
+%define ERROR_TEXT 0x64
 
 ; VGA
 %define VGA_MEMORY 0xB800
@@ -29,6 +32,11 @@
 
 ; math
 %define MATH_XOR_ROUND 0xFFFE
+
+; --- DISK SETTINGS --- (really, really important!)
+%define HEAD 0
+%define CYLINDER 0
+%define KERNEL_ADDR 0x7E00
 
 ; --- TEXT ---
 [org START_AT] ; start at 7c00
@@ -47,6 +55,9 @@ mov sp, START_AT
 
 ; re enable inputs
 sti
+
+; push dl we need this later
+push dx
 
 ; configure lodsb
 mov ds, ax ; ax is alredy 0
@@ -79,7 +90,7 @@ main:
 
     call print_string
 
-    jmp hang ; jump to hang
+    jmp load_kernel ; jump to hang
 
 print_string:
     ; a full fledged printing function that uses print
@@ -182,6 +193,45 @@ print:
     stosw
     ret
 
+load_kernel:
+    ; ignore es
+    mov bx, KERNEL_ADDR
+    xor ax, ax
+    mov es, ax
+
+    ; config
+    mov ah, SECTOR_READ
+    mov al, 2
+    mov cl, 2
+    mov dh, HEAD
+    mov ch, CYLINDER
+
+    ; pop the orginally pushed dl
+    pop dx
+
+    int BIOS_WRITE
+
+    ; jump if errors
+    jc disk_error
+
+    jmp 0x0000:KERNEL_ADDR
+
+disk_error:
+    inc bl
+
+    ; print an error message
+    call cursor_hide
+    call clear_screen
+
+    mov si, erro
+
+    mov ah, ERROR_TEXT
+
+    ; now print it and hang
+    call print_string
+
+    jmp hang
+
 hang:
     jmp $ ; loop forever
 
@@ -189,6 +239,7 @@ hang:
 
 ; strings
 hello: db "Going to 32 bit protected mode...", 0
+erro: db "AN ERROR OCCURED", 0
 
 ; check code size
 %assign CODE_SIZE ($ - $$)
