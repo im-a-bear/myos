@@ -1,45 +1,9 @@
-; --- CONSTANTS ---
-
-; magic constants
-%define START_AT 0x7C00
-%define PADDING 512
-%define MAGIC_NUMBER 0xAA55
-
-; string constants
-%define CARRIAGE_RETURN 0x0D
-%define LINE_FEED 0x0A
-
-; bios interrupts
-%define BIOS_INTERRUPT 0x10
-%define BIOS_WRITE 0x13
-%define VIDEO_FUNC 0x0E
-%define SECTOR_READ 0x02
-%define CURSOR_TYPE_FUNC 0x01
-
-; bios info
-%define INVISIBLE_CURSOR 0x3F
-
-; colors
-%define BASE_TEXT_COLOR 0x6D
-%define BACKGROUND_COLOR 0x6F
-%define ERROR_TEXT 0x64
-
-; VGA
-%define VGA_MEMORY 0xB800
-%define SCREEN_SIZE 2000
-%define SCREEN_X 80
-%define SCREEN_Y 25
-
-; math
-%define MATH_XOR_ROUND 0xFFFE
-
-; --- DISK SETTINGS --- (really, really important!)
-%define HEAD 0
-%define CYLINDER 0
-%define KERNEL_ADDR 0x7E00
+%include "src/constants.inc"
+%include "src/utils/bitmask.inc"
 
 ; --- TEXT ---
 [org START_AT] ; start at 7c00
+[bits 16] ; 16 bits
 
 ; make call stack available
 
@@ -199,15 +163,15 @@ load_kernel:
     xor ax, ax
     mov es, ax
 
+    ; pop the orginally pushed dl
+    pop dx
+
     ; config
     mov ah, SECTOR_READ
-    mov al, 2
+    mov al, KERNEL_SECTORS
     mov cl, 2
     mov dh, HEAD
     mov ch, CYLINDER
-
-    ; pop the orginally pushed dl
-    pop dx
 
     int BIOS_WRITE
 
@@ -217,13 +181,17 @@ load_kernel:
     jmp 0x0000:KERNEL_ADDR
 
 disk_error:
-    inc bl
+    pusha ; save this state for debugging
 
-    ; print an error message
-    call cursor_hide
-    call clear_screen
+    mov bl, 1
+    
+    ; xchg bx, bx ; for developement
 
     mov si, erro
+
+    ; print an error message
+    call get_string_length
+    call math_center
 
     mov ah, ERROR_TEXT
 
@@ -245,5 +213,5 @@ erro: db "AN ERROR OCCURED", 0
 %assign CODE_SIZE ($ - $$)
 %warning The bootloader size is: CODE_SIZE bytes.
 
-times (PADDING - 2) - ($ - $$) db 0
+times PADDING - ($ - $$) db 0
 dw MAGIC_NUMBER ; magic number

@@ -1,4 +1,6 @@
 #!/bin/bash
+rm -rf out
+
 mkdir -p out
 
 # Compile bootloader (Sector 1)
